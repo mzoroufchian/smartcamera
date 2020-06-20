@@ -3,6 +3,7 @@
 # SMART CAMERA project for Xilinx Open Hardware 2020 design contest
 
 #### Warning: Built for Vivado 2018.3
+#### Notice: Git Large File Storage (LFS) is required to clone this repository
 
 All files for regenerating Linux and Hardware design is included here, for more information see README inside each folder.
 
