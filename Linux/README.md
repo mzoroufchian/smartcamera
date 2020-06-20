@@ -16,14 +16,14 @@ Follow below steps to copy and run your linux distribution
 
 ```
 rm -rf /media/<your_user_name> /BOOT/*
-cp /home/<your_user_name>/Yocto/yocto_image/ToSDCard/*  /media/<your_user_name>/BOOT/
+cp BOOT/*  /media/<your_user_name>/BOOT/
 ```
 
 3.	run following commands to copy rootfs
 
 ```
 sudo rm -rf /media/<your_user_name>/rootfs/*
-sudo tar x -C /media/<your_user_name>/rootfs -f /home/<your_user_name>/Yocto/yocto_image/root/core-image-minimal-zybo-smartcam.rootfs.tar.gz
+sudo tar x -C /media/<your_user_name>/rootfs -f rootfs/core-image-minimal-zybo-smartcam.rootfs.tar.gz
 ```
 
 4.	Eject the SD card from your computer and insert it into the Zybo Z7
