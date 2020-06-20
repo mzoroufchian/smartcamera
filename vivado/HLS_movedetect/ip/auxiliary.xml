@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xd:acceleratorMap xmlns:xd="http://www.xilinx.com/xidane" xd:functionName="detec_movement" xd:componentRef="detec_movement" xd:initiationInterval="323" xd:clockPeriod="10.000" xd:sequential="true" xd:hostMachine="64" xd:reset="control">
+  <xd:controlReg xd:name="control" xd:interfaceRef="s_axi_detec_data" xd:busTypeRef="axilite" xd:type="generic_axi_lite" xd:offset="0x0"/>
+  <xd:arg xd:name="inData[]" xd:originalName="inData" xd:direction="in" xd:interfaceRef="s_axi_detec_data" xd:busTypeRef="axilite" xd:offset="0x100" xd:arraySize="160" xd:dataWidth="8"/>
+  <xd:arg xd:name="*(motion)" xd:originalName="motion" xd:direction="out" xd:interfaceRef="s_axi_detec_data" xd:busTypeRef="axilite" xd:offset="0x200" xd:handshakeRef="ap_vld" xd:statusOffset="0x204" xd:dataWidth="8"/>
+  <xd:arg xd:name="*(position)" xd:originalName="position" xd:direction="out" xd:interfaceRef="s_axi_detec_data" xd:busTypeRef="axilite" xd:offset="0x208" xd:handshakeRef="ap_vld" xd:statusOffset="0x20C" xd:dataWidth="32"/>
+  <xd:arg xd:name="*(finished)" xd:originalName="finished" xd:direction="out" xd:interfaceRef="s_axi_detec_data" xd:busTypeRef="axilite" xd:offset="0x210" xd:handshakeRef="ap_vld" xd:statusOffset="0x214" xd:dataWidth="8"/>
+  <xd:latencyEstimates xd:best-case="2" xd:worst-case="322" xd:average-case="282"/>
+  <xd:resourceEstimates xd:LUT="699" xd:FF="407" xd:BRAM="18" xd:DSP="0"/>
+</xd:acceleratorMap>

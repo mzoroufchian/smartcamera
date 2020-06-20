@@ -1,0 +1,407 @@
+diff --git a/drivers/media/platform/xilinx/xilinx-csi2rxss.c b/drivers/media/platform/xilinx/xilinx-csi2rxss.c
+index a4cab86..4f8a92d 100755
+--- a/drivers/media/platform/xilinx/xilinx-csi2rxss.c
++++ b/drivers/media/platform/xilinx/xilinx-csi2rxss.c
+@@ -20,6 +20,7 @@
+ #include <linux/compiler.h>
+ #include <linux/delay.h>
+ #include <linux/device.h>
++#include <linux/gpio/consumer.h>
+ #include <linux/interrupt.h>
+ #include <linux/io.h>
+ #include <linux/kernel.h>
+@@ -79,7 +80,6 @@
+ 
+ #define XCSI_ISR_OFFSET			0x00000024
+ #define XCSI_ISR_FR_SHIFT		31
+-#define XCSI_ISR_VCX_SHIFT		30
+ #define XCSI_ISR_ILC_SHIFT		21
+ #define XCSI_ISR_SPFIFOF_SHIFT		20
+ #define XCSI_ISR_SPFIFONE_SHIFT		19
+@@ -100,7 +100,6 @@
+ #define XCSI_ISR_VC0FSYNCERR_SHIFT	1
+ #define XCSI_ISR_VC0FLVLERR_SHIFT	0
+ #define XCSI_ISR_FR_MASK		BIT(XCSI_ISR_FR_SHIFT)
+-#define XCSI_ISR_VCX_MASK		BIT(XCSI_ISR_VCX_SHIFT)
+ #define XCSI_ISR_ILC_MASK		BIT(XCSI_ISR_ILC_SHIFT)
+ #define XCSI_ISR_SPFIFOF_MASK		BIT(XCSI_ISR_SPFIFOF_SHIFT)
+ #define XCSI_ISR_SPFIFONE_MASK		BIT(XCSI_ISR_SPFIFONE_SHIFT)
+@@ -120,7 +119,7 @@
+ #define XCSI_ISR_VC1FLVLERR_MASK	BIT(XCSI_ISR_VC1FLVLERR_SHIFT)
+ #define XCSI_ISR_VC0FSYNCERR_MASK	BIT(XCSI_ISR_VC0FSYNCERR_SHIFT)
+ #define XCSI_ISR_VC0FLVLERR_MASK	BIT(XCSI_ISR_VC0FLVLERR_SHIFT)
+-#define XCSI_ISR_ALLINTR_MASK		0xC03FFFFF
++#define XCSI_ISR_ALLINTR_MASK		0x803FFFFF
+ 
+ #define XCSI_INTR_PROT_MASK	(XCSI_ISR_VC3FSYNCERR_MASK |	\
+ 				 XCSI_ISR_VC3FLVLERR_MASK |	\
+@@ -129,8 +128,7 @@
+ 				 XCSI_ISR_VC1FSYNCERR_MASK |	\
+ 				 XCSI_ISR_VC1FLVLERR_MASK |	\
+ 				 XCSI_ISR_VC0FSYNCERR_MASK |	\
+-				 XCSI_ISR_VC0FLVLERR_MASK |	\
+-				 XCSI_ISR_VCX_MASK)
++				 XCSI_ISR_VC0FLVLERR_MASK)
+ 
+ #define XCSI_INTR_PKTLVL_MASK	(XCSI_ISR_ECC2BERR_MASK |	\
+ 				 XCSI_ISR_ECC1BERR_MASK |	\
+@@ -151,7 +149,6 @@
+ 
+ #define XCSI_IER_OFFSET			0x00000028
+ #define XCSI_IER_FR_SHIFT		31
+-#define XCSI_IER_VCX_SHIFT		30
+ #define XCSI_IER_ILC_SHIFT		21
+ #define XCSI_IER_SPFIFOF_SHIFT		20
+ #define XCSI_IER_SPFIFONE_SHIFT		19
+@@ -172,7 +169,6 @@
+ #define XCSI_IER_VC0FSYNCERR_SHIFT	1
+ #define XCSI_IER_VC0FLVLERR_SHIFT	0
+ #define XCSI_IER_FR_MASK		BIT(XCSI_IER_FR_SHIFT)
+-#define XCSI_IER_VCX_MASK		BIT(XCSI_IER_VCX_SHIFT)
+ #define XCSI_IER_ILC_MASK		BIT(XCSI_IER_ILC_SHIFT)
+ #define XCSI_IER_SPFIFOF_MASK		BIT(XCSI_IER_SPFIFOF_SHIFT)
+ #define XCSI_IER_SPFIFONE_MASK		BIT(XCSI_IER_SPFIFONE_SHIFT)
+@@ -192,7 +188,7 @@
+ #define XCSI_IER_VC1FLVLERR_MASK	BIT(XCSI_IER_VC1FLVLERR_SHIFT)
+ #define XCSI_IER_VC0FSYNCERR_MASK	BIT(XCSI_IER_VC0FSYNCERR_SHIFT)
+ #define XCSI_IER_VC0FLVLERR_MASK	BIT(XCSI_IER_VC0FLVLERR_SHIFT)
+-#define XCSI_IER_ALLINTR_MASK		0xC03FFFFF
++#define XCSI_IER_ALLINTR_MASK		0x803FFFFF
+ 
+ #define XCSI_SPKTR_OFFSET		0x00000030
+ #define XCSI_SPKTR_DATA_SHIFT		8
+@@ -202,33 +198,6 @@
+ #define XCSI_SPKTR_VC_MASK		0x000000C0
+ #define XCSI_SPKTR_DT_MASK		0x0000003F
+ 
+-#define XCSI_VCXR_OFFSET		0x00000034
+-#define XCSI_VCXR_VC15FSYNCERR_MASK	BIT(23)
+-#define XCSI_VCXR_VC15FLVLERR_MASK	BIT(22)
+-#define XCSI_VCXR_VC14FSYNCERR_MASK	BIT(21)
+-#define XCSI_VCXR_VC14FLVLERR_MASK	BIT(20)
+-#define XCSI_VCXR_VC13FSYNCERR_MASK	BIT(19)
+-#define XCSI_VCXR_VC13FLVLERR_MASK	BIT(18)
+-#define XCSI_VCXR_VC12FSYNCERR_MASK	BIT(17)
+-#define XCSI_VCXR_VC12FLVLERR_MASK	BIT(16)
+-#define XCSI_VCXR_VC11FSYNCERR_MASK	BIT(15)
+-#define XCSI_VCXR_VC11FLVLERR_MASK	BIT(14)
+-#define XCSI_VCXR_VC10FSYNCERR_MASK	BIT(13)
+-#define XCSI_VCXR_VC10FLVLERR_MASK	BIT(12)
+-#define XCSI_VCXR_VC9FSYNCERR_MASK	BIT(11)
+-#define XCSI_VCXR_VC9FLVLERR_MASK	BIT(10)
+-#define XCSI_VCXR_VC8FSYNCERR_MASK	BIT(9)
+-#define XCSI_VCXR_VC8FLVLERR_MASK	BIT(8)
+-#define XCSI_VCXR_VC7FSYNCERR_MASK	BIT(7)
+-#define XCSI_VCXR_VC7FLVLERR_MASK	BIT(6)
+-#define XCSI_VCXR_VC6FSYNCERR_MASK	BIT(5)
+-#define XCSI_VCXR_VC6FLVLERR_MASK	BIT(4)
+-#define XCSI_VCXR_VC5FSYNCERR_MASK	BIT(3)
+-#define XCSI_VCXR_VC5FLVLERR_MASK	BIT(2)
+-#define XCSI_VCXR_VC4FSYNCERR_MASK	BIT(1)
+-#define XCSI_VCXR_VC4FLVLERR_MASK	BIT(0)
+-#define XCSI_VCXR_MASK			0x00FFFFFF
+-
+ #define XCSI_CLKINFR_OFFSET		0x0000003C
+ #define XCSI_CLKINFR_STOP_SHIFT		1
+ #define XCSI_CLKINFR_STOP_MASK		BIT(XCSI_CLKINFR_STOP_SHIFT)
+@@ -248,18 +217,6 @@
+ #define XCSI_VC1INF1R_OFFSET		0x00000068
+ #define XCSI_VC2INF1R_OFFSET		0x00000070
+ #define XCSI_VC3INF1R_OFFSET		0x00000078
+-#define XCSI_VC4INF1R_OFFSET		0x00000080
+-#define XCSI_VC5INF1R_OFFSET		0x00000088
+-#define XCSI_VC6INF1R_OFFSET		0x00000090
+-#define XCSI_VC7INF1R_OFFSET		0x00000098
+-#define XCSI_VC8INF1R_OFFSET		0x000000A0
+-#define XCSI_VC9INF1R_OFFSET		0x000000A8
+-#define XCSI_VC10INF1R_OFFSET		0x000000B0
+-#define XCSI_VC11INF1R_OFFSET		0x000000B8
+-#define XCSI_VC12INF1R_OFFSET		0x000000C0
+-#define XCSI_VC13INF1R_OFFSET		0x000000C8
+-#define XCSI_VC14INF1R_OFFSET		0x000000D0
+-#define XCSI_VC15INF1R_OFFSET		0x000000D8
+ #define XCSI_VCXINF1R_LINECOUNT_SHIFT	16
+ #define XCSI_VCXINF1R_BYTECOUNT_SHIFT	0
+ #define XCSI_VCXINF1R_LINECOUNT_MASK	0xFFFF0000
+@@ -269,18 +226,6 @@
+ #define XCSI_VC1INF2R_OFFSET		0x0000006C
+ #define XCSI_VC2INF2R_OFFSET		0x00000074
+ #define XCSI_VC3INF2R_OFFSET		0x0000007C
+-#define XCSI_VC4INF2R_OFFSET		0x00000084
+-#define XCSI_VC5INF2R_OFFSET		0x0000008C
+-#define XCSI_VC6INF2R_OFFSET		0x00000094
+-#define XCSI_VC7INF2R_OFFSET		0x0000009C
+-#define XCSI_VC8INF2R_OFFSET		0x000000A4
+-#define XCSI_VC9INF2R_OFFSET		0x000000AC
+-#define XCSI_VC10INF2R_OFFSET		0x000000B4
+-#define XCSI_VC11INF2R_OFFSET		0x000000BC
+-#define XCSI_VC12INF2R_OFFSET		0x000000C4
+-#define XCSI_VC13INF2R_OFFSET		0x000000CC
+-#define XCSI_VC14INF2R_OFFSET		0x000000D4
+-#define XCSI_VC15INF2R_OFFSET		0x000000DC
+ #define XCSI_VCXINF2R_DATATYPE_SHIFT	0
+ #define XCSI_VCXINF2R_DATATYPE_MASK	0x0000003F
+ 
+@@ -320,6 +265,15 @@
+ #define XCSI_DEFAULT_WIDTH	(1920)
+ #define XCSI_DEFAULT_HEIGHT	(1080)
+ 
++#define XCSI_MIN_WIDTH			32
++#define XCSI_MAX_WIDTH			4096
++#define XCSI_MIN_HEIGHT			32
++#define XCSI_MAX_HEIGHT			4096
++
++/* POWER MACROS */
++#define XCSI_RESET_ASSERT	(0x1)
++#define XCSI_RESET_DEASSERT	(0x0)
++
+ /*
+  * Macro to return "true" or "false" string if bit is set
+  */
+@@ -431,8 +385,6 @@ struct xcsi2rxss_event {
+  * @pxlformat: String with CSI pixel format from IP
+  * @num_lanes: Number of lanes requested from application
+  * @events: Structure to maintain event logs
+- * @vcx_events: Structure to maintain VCX event logs
+- * @en_vcx: If more than 4 VC are enabled.
+  */
+ struct xcsi2rxss_core {
+ 	struct device *dev;
+@@ -450,8 +402,6 @@ struct xcsi2rxss_core {
+ 	const char *pxlformat;
+ 	u32 num_lanes;
+ 	struct xcsi2rxss_event *events;
+-	struct xcsi2rxss_event *vcx_events;
+-	bool en_vcx;
+ };
+ 
+ /**
+@@ -468,6 +418,7 @@ struct xcsi2rxss_core {
+  * @npads: number of pads
+  * @streaming: Flag for storing streaming state
+  * @suspended: Flag for storing suspended state
++ * @rst_gpio: GPIO device attached to reset
+  *
+  * This structure contains the device driver related parameters
+  */
+@@ -484,6 +435,7 @@ struct xcsi2rxss_state {
+ 	unsigned int npads;
+ 	bool streaming;
+ 	bool suspended;
++	struct gpio_desc *rst_gpio;
+ };
+ 
+ static inline struct xcsi2rxss_state *
+@@ -549,7 +501,6 @@ static const struct pixel_format pixel_formats[] = {
+ 
+ static struct xcsi2rxss_event xcsi2rxss_events[] = {
+ 	{ XCSI_ISR_FR_MASK, "Frame Received", 0 },
+-	{ XCSI_ISR_VCX_MASK, "VCX Frame Errors", 0 },
+ 	{ XCSI_ISR_ILC_MASK, "Invalid Lane Count Error", 0 },
+ 	{ XCSI_ISR_SPFIFOF_MASK, "Short Packet FIFO OverFlow Error", 0 },
+ 	{ XCSI_ISR_SPFIFONE_MASK, "Short Packet FIFO Not Empty", 0 },
+@@ -573,14 +524,6 @@ static struct xcsi2rxss_event xcsi2rxss_events[] = {
+ 
+ #define XMIPICSISS_NUM_EVENTS ARRAY_SIZE(xcsi2rxss_events)
+ 
+-#define XMIPICSISS_VCX_START		(4)
+-#define XMIPICSISS_MAX_VC		(4)
+-#define XMIPICSISS_MAX_VCX		(16)
+-
+-/* There are 2 events frame sync and frame level error per VC */
+-#define XMIPICSISS_VCX_NUM_EVENTS	((XMIPICSISS_MAX_VCX -\
+-					 XMIPICSISS_MAX_VC) * 2)
+-
+ /**
+  * xcsi2rxss_clr_and_set - Clear and set the register with a bitmask
+  * @xcsi2rxss: Xilinx MIPI CSI2 Rx Subsystem subdev core struct
+@@ -792,19 +735,6 @@ static irqreturn_t xcsi2rxss_irq_handler(int irq, void *dev_id)
+ 			dev_dbg(core->dev, "%s: %d\n", core->events[i].name,
+ 					core->events[i].counter);
+ 		}
+-
+-		if (status & XCSI_ISR_VCX_MASK && core->en_vcx) {
+-			u32 vcxstatus;
+-
+-			vcxstatus = xcsi2rxss_read(core, XCSI_VCXR_OFFSET);
+-			vcxstatus &= XCSI_VCXR_MASK;
+-			for (i = 0; i < XMIPICSISS_VCX_NUM_EVENTS; i++) {
+-				if (!(vcxstatus & core->vcx_events[i].mask))
+-					continue;
+-				core->vcx_events[i].counter++;
+-			}
+-			xcsi2rxss_write(core, XCSI_VCXR_OFFSET, vcxstatus);
+-		}
+ 	}
+ 
+ 	xcsi2rxss_write(core, XCSI_ISR_OFFSET, status);
+@@ -819,11 +749,6 @@ static void xcsi2rxss_reset_event_counters(struct xcsi2rxss_state *state)
+ 	for (i = 0; i < XMIPICSISS_NUM_EVENTS; i++)
+ 		state->core.events[i].counter = 0;
+ 
+-	if (!state->core.en_vcx)
+-		return;
+-
+-	for (i = 0; i < XMIPICSISS_VCX_NUM_EVENTS; i++)
+-		state->core.vcx_events[i].counter = 0;
+ }
+ 
+ /**
+@@ -841,18 +766,6 @@ static void xcsi2rxss_log_counters(struct xcsi2rxss_state *state)
+ 				  state->core.events[i].name,
+ 				  state->core.events[i].counter);
+ 	}
+-
+-	if (!state->core.en_vcx)
+-		return;
+-
+-	for (i = 0; i < XMIPICSISS_VCX_NUM_EVENTS; i++) {
+-		if (state->core.vcx_events[i].counter > 0)
+-			v4l2_info(&state->subdev,
+-				  "VC %d Frame %s error vcx events: %d\n",
+-				  (i / 2) + XMIPICSISS_VCX_START,
+-				  i & 1 ? "Sync" : "Level",
+-				  state->core.vcx_events[i].counter);
+-	}
+ }
+ 
+ /**
+@@ -867,7 +780,7 @@ static int xcsi2rxss_log_status(struct v4l2_subdev *sd)
+ {
+ 	struct xcsi2rxss_state *xcsi2rxss = to_xcsi2rxssstate(sd);
+ 	struct xcsi2rxss_core *core = &xcsi2rxss->core;
+-	u32 reg, data, i, max_vc;
++	u32 reg, data, i;
+ 
+ 	mutex_lock(&xcsi2rxss->lock);
+ 
+@@ -908,13 +821,8 @@ static int xcsi2rxss_log_status(struct v4l2_subdev *sd)
+ 	/* Virtual Channel Image Information */
+ 	v4l2_info(sd, "********** Virtual Channel Info ************\n");
+ 	v4l2_info(sd, "VC\tLine Count\tByte Count\tData Type\n");
+-	if (core->en_vcx)
+-		max_vc = XMIPICSISS_MAX_VCX;
+-	else
+-		max_vc = XMIPICSISS_MAX_VC;
+-
+ 	reg = XCSI_VC0INF1R_OFFSET;
+-	for (i = 0; i < max_vc; i++) {
++	for (i = 0; i < 4; i++) {
+ 		u32 line_count, byte_count, data_type;
+ 		char *datatypestr;
+ 
+@@ -1159,10 +1067,14 @@ static int xcsi2rxss_g_volatile_ctrl(struct v4l2_ctrl *ctrl)
+ static int xcsi2rxss_start_stream(struct xcsi2rxss_state *xcsi2rxss)
+ {
+ 	int ret;
++	
++	gpiod_set_value_cansleep(xcsi2rxss->rst_gpio,
++					 XCSI_RESET_ASSERT);
++	udelay(1);
++	gpiod_set_value_cansleep(xcsi2rxss->rst_gpio,
++					 XCSI_RESET_DEASSERT);
+ 
+ 	xcsi2rxss_enable(&xcsi2rxss->core, true);
+-
+-	ret = xcsi2rxss_reset(&xcsi2rxss->core);
+ 	if (ret < 0)
+ 		return ret;
+ 
+@@ -1327,9 +1239,13 @@ static int xcsi2rxss_set_format(struct v4l2_subdev *sd,
+ 		/* Restore the original pad format code */
+ 		fmt->format.code = code;
+ 		__format->code = code;
+-		__format->width = fmt->format.width;
+-		__format->height = fmt->format.height;
+ 	}
++	
++	__format->width = clamp_t(unsigned int, fmt->format.width,
++					XCSI_MIN_WIDTH, XCSI_MAX_WIDTH);
++	__format->height = clamp_t(unsigned int, fmt->format.height,
++					XCSI_MIN_HEIGHT, XCSI_MAX_HEIGHT);
++
+ 
+ 	mutex_unlock(&xcsi2rxss->lock);
+ 
+@@ -1396,7 +1312,7 @@ static struct v4l2_ctrl_config xcsi2rxss_ctrls[] = {
+ 		.name	= "MIPI CSI2 Rx Subsystem: Frames Received Counter",
+ 		.type	= V4L2_CTRL_TYPE_INTEGER,
+ 		.min	= 0,
+-		.max	= 0xFFFFFFFF,
++		.max	= 0x7FFFFFFF,
+ 		.step	= 1,
+ 		.def	= 0,
+ 		.flags	= V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_READ_ONLY,
+@@ -1536,15 +1452,12 @@ static int xcsi2rxss_parse_of(struct xcsi2rxss_state *xcsi2rxss)
+ 		return -EINVAL;
+ 	}
+ 
+-	core->en_vcx = of_property_read_bool(node, "xlnx,en-vcx");
+-
+ 	ret = of_property_read_u32(node, "xlnx,vc", &core->vc);
+ 	if (ret < 0) {
+ 		dev_err(core->dev, "missing xlnx,vc property\n");
+ 		return ret;
+ 	}
+-	if ((core->vc > XMIPICSISS_MAX_VC && !core->en_vcx) ||
+-	    (core->vc > XMIPICSISS_MAX_VCX && core->en_vcx)) {
++	if (core->vc > 4) {
+ 		dev_err(core->dev, "invalid virtual channel property value.\n");
+ 		return -EINVAL;
+ 	}
+@@ -1553,6 +1466,10 @@ static int xcsi2rxss_parse_of(struct xcsi2rxss_state *xcsi2rxss)
+ 		of_property_read_bool(node, "xlnx,en-active-lanes");
+ 	dev_dbg(core->dev, "Enable active lanes property = %s\n",
+ 			core->enable_active_lanes ? "Present" : "Absent");
++	if (core->enable_active_lanes) {
++		dev_err(core->dev, "This driver currently does not support en-active-lanes\n");
++		return -EINVAL;
++	}
+ 
+ 	ret = of_property_read_string(node, "xlnx,csi-pxl-format",
+ 					&core->pxlformat);
+@@ -1684,6 +1601,14 @@ static int xcsi2rxss_parse_of(struct xcsi2rxss_state *xcsi2rxss)
+ 		return ret;
+ 	}
+ 
++	/* Reset GPIO */
++	xcsi2rxss->rst_gpio = devm_gpiod_get(core->dev, "reset", GPIOD_OUT_HIGH);
++	if (IS_ERR(xcsi2rxss->rst_gpio)) {
++		if (PTR_ERR(xcsi2rxss->rst_gpio) != -EPROBE_DEFER)
++			dev_err(core->dev, "Reset GPIO not setup in DT");
++		return PTR_ERR(xcsi2rxss->rst_gpio);
++	}
++
+ 	return 0;
+ }
+ 
+@@ -1717,27 +1642,12 @@ static int xcsi2rxss_probe(struct platform_device *pdev)
+ 	/*
+ 	 * Reset and initialize the core.
+ 	 */
++	gpiod_set_value_cansleep(xcsi2rxss->rst_gpio,
++					 XCSI_RESET_DEASSERT);
+ 	xcsi2rxss_reset(&xcsi2rxss->core);
+ 
+ 	xcsi2rxss->core.events =  (struct xcsi2rxss_event *)&xcsi2rxss_events;
+ 
+-	if (xcsi2rxss->core.en_vcx) {
+-		u32 alloc_size;
+-
+-		alloc_size = sizeof(struct xcsi2rxss_event) *
+-			     XMIPICSISS_VCX_NUM_EVENTS;
+-		xcsi2rxss->core.vcx_events = devm_kzalloc(&pdev->dev,
+-							  alloc_size,
+-							  GFP_KERNEL);
+-		if (!xcsi2rxss->core.vcx_events) {
+-			mutex_destroy(&xcsi2rxss->lock);
+-			return -ENOMEM;
+-		}
+-
+-		for (i = 0; i < XMIPICSISS_VCX_NUM_EVENTS; i++)
+-			xcsi2rxss->core.vcx_events[i].mask = 1 << i;
+-	}
+-
+ 	/* Initialize V4L2 subdevice and media entity */
+ 	xcsi2rxss->pads[0].flags = MEDIA_PAD_FL_SOURCE;
+ 	xcsi2rxss->pads[1].flags = MEDIA_PAD_FL_SINK;

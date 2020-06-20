@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project>
+  <core name="" type="" target="">
+    <kernel name="detec_movement" language="c" vlnv="xilinx.com:hls:detec_movement:1.0" attributes="" hash="" preferredWorkGroupSizeMultiple="0" workGroupSize="1" debug="false" interrupt="true">
+      <port name="S_AXI_DETEC_DATA" mode="slave" range="0x1000" dataWidth="8" portType="addressable" base="0x00000000"/>
+      <arg name="inData" addressQualifier="0" id="0" port="S_AXI_DETEC_DATA" size="0x4" offset="0x100" hostOffset="0x0" hostSize="0x4" type="unsigned char[]"/>
+      <arg name="motion" addressQualifier="0" id="1" port="S_AXI_DETEC_DATA" size="0x4" offset="0x200" hostOffset="0x0" hostSize="0x4" type="char*"/>
+      <arg name="position" addressQualifier="0" id="2" port="S_AXI_DETEC_DATA" size="0x4" offset="0x208" hostOffset="0x0" hostSize="0x4" type="int*"/>
+      <arg name="finished" addressQualifier="0" id="3" port="S_AXI_DETEC_DATA" size="0x4" offset="0x210" hostOffset="0x0" hostSize="0x4" type="char*"/>
+      <compileWorkGroupSize x="1" y="1" z="1"/>
+    </kernel>
+  </core>
+</project>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xd:acceleratorMap xmlns:xd="http://www.xilinx.com/xidane" xd:functionName="detectFaces" xd:componentRef="detectFaces" xd:initiationInterval="x" xd:clockPeriod="10.000" xd:sequential="true" xd:hostMachine="64" xd:reset="control">
+  <xd:controlReg xd:name="control" xd:interfaceRef="s_axi_CONTROL_BUS" xd:busTypeRef="axilite" xd:type="generic_axi_lite" xd:offset="0x0"/>
+  <xd:arg xd:name="inData[]" xd:originalName="inData" xd:direction="in" xd:interfaceRef="s_axi_CONTROL_BUS" xd:busTypeRef="axilite" xd:offset="0x200" xd:arraySize="320" xd:dataWidth="8"/>
+  <xd:arg xd:name="result_x[]" xd:originalName="result_x" xd:direction="out" xd:interfaceRef="s_axi_CONTROL_BUS" xd:busTypeRef="axilite" xd:offset="0x400" xd:arraySize="100" xd:dataWidth="32"/>
+  <xd:arg xd:name="result_y[]" xd:originalName="result_y" xd:direction="out" xd:interfaceRef="s_axi_CONTROL_BUS" xd:busTypeRef="axilite" xd:offset="0x600" xd:arraySize="100" xd:dataWidth="32"/>
+  <xd:arg xd:name="result_w[]" xd:originalName="result_w" xd:direction="out" xd:interfaceRef="s_axi_CONTROL_BUS" xd:busTypeRef="axilite" xd:offset="0x800" xd:arraySize="100" xd:dataWidth="32"/>
+  <xd:arg xd:name="result_h[]" xd:originalName="result_h" xd:direction="out" xd:interfaceRef="s_axi_CONTROL_BUS" xd:busTypeRef="axilite" xd:offset="0xA00" xd:arraySize="100" xd:dataWidth="32"/>
+  <xd:arg xd:name="*(result_size)" xd:originalName="result_size" xd:direction="out" xd:interfaceRef="s_axi_CONTROL_BUS" xd:busTypeRef="axilite" xd:offset="0xC00" xd:handshakeRef="ap_vld" xd:statusOffset="0xC04" xd:dataWidth="32"/>
+  <xd:arg xd:name="*(finished)" xd:originalName="finished" xd:direction="out" xd:interfaceRef="s_axi_CONTROL_BUS" xd:busTypeRef="axilite" xd:offset="0xC08" xd:handshakeRef="ap_vld" xd:statusOffset="0xC0C" xd:dataWidth="8"/>
+  <xd:latencyEstimates xd:best-case="undef" xd:worst-case="undef" xd:average-case="undef"/>
+  <xd:resourceEstimates xd:LUT="27857" xd:FF="14594" xd:BRAM="246" xd:DSP="70"/>
+</xd:acceleratorMap>

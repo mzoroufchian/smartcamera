@@ -1,0 +1,675 @@
+
+
+
+
+#include "haar.h"
+#include "sqrt.h"
+
+/****************************************************************************************/
+/* DECLARATION OF FUNCTIONS
+****************************************************************************************/
+void integralImages_1( unsigned char Data[WINDOW_SIZE][WINDOW_SIZE], int Sum[WINDOW_SIZE][WINDOW_SIZE], int Sqsum[WINDOW_SIZE][WINDOW_SIZE]);
+void integralImages_2( unsigned char Data[WINDOW_SIZE][WINDOW_SIZE], int Sum[WINDOW_SIZE][WINDOW_SIZE], int Sqsum[WINDOW_SIZE][WINDOW_SIZE]);
+
+void imageScaler        ( int src_height,
+			  	  	  	  int src_width,
+                          unsigned char Data[IMAGE_HEIGHT][IMAGE_WIDTH],
+                          int dest_height,
+						  int dest_width,
+                          unsigned char IMG1_data[IMAGE_HEIGHT][IMAGE_WIDTH]);
+
+void processImage       ( float factor,
+                          int sum_row,
+                          int sum_col,
+                          int *AllCandidates_x,
+                          int *AllCandidates_y,
+                          int *AllCandidates_w,
+                          int *AllCandidates_h,
+                          int *AllCandidates_size,
+                          unsigned char IMG1_data[IMAGE_HEIGHT][IMAGE_WIDTH],
+                          MySize winSize);
+
+
+int cascadeClassifier_1 (	int II[WINDOW_SIZE][WINDOW_SIZE],int SII[WINDOW_SIZE][WINDOW_SIZE]);
+int cascadeClassifier_2 (	int II[WINDOW_SIZE][WINDOW_SIZE],int SII[WINDOW_SIZE][WINDOW_SIZE]);
+
+int weakClassifier      ( int stddev,
+                          ap_uint<25> coord[12],
+                          int haar_counter,
+                          int w_id);
+
+unsigned int int_sqrt   ( unsigned int  value);
+
+inline  int  myRound ( float value )
+{
+  return (int)(value + (value >= 0 ? 0.5 : -0.5));
+}
+
+//========================================================================================
+// TOP LEVEL MODULE OR DUT (DEVICE UNDER TEST)
+//========================================================================================
+
+void detectFaces
+
+(
+  unsigned char inData[IMAGE_WIDTH],  // input port
+  int result_x[RESULT_SIZE],          // Output ports
+  int result_y[RESULT_SIZE],
+  int result_w[RESULT_SIZE],
+  int result_h[RESULT_SIZE],
+  int *result_size,
+  char *finished
+)
+
+{
+#pragma HLS interface s_axilite port=inData
+#pragma HLS interface s_axilite port=result_x
+#pragma HLS interface s_axilite port=result_y
+#pragma HLS interface s_axilite port=result_w
+#pragma HLS interface s_axilite port=result_h
+#pragma HLS interface s_axilite port=result_size
+#pragma HLS interface s_axilite port=finished
+#pragma HLS INTERFACE s_axilite port=return     bundle=CONTROL_BUS
+
+   static unsigned char Data[IMAGE_HEIGHT][IMAGE_WIDTH];
+   int i, j;
+
+   int result_x_Scale[RESULT_SIZE];
+   int result_y_Scale[RESULT_SIZE];
+   int result_w_Scale[RESULT_SIZE];
+   int result_h_Scale[RESULT_SIZE];
+   int res_size_Scale = 0;
+   int *result_size_Scale = &res_size_Scale;
+
+  /* Here we save the 320 X 240 image into the BRAMS. The CPU makes 240 calls to this hardware function haar
+  * first 239 calls just load the BRAMs with the image and last 240th call does the actual face detection
+  * This is a hacky way because SDSoC does not allow to send 320X240 image at once. In future sdsalloc can be
+  * used allocate the memory directly into the FPGA. */
+
+  static int counter = 0;
+  if ( counter < IMAGE_HEIGHT){
+    for( j = 0; j < IMAGE_WIDTH; j++){
+         Data[counter][j] = inData[j];
+    }
+    counter++;
+    if ( counter < IMAGE_HEIGHT ){
+ /*     for ( i = 0; i < RESULT_SIZE; i++){
+        result_x[i] = 0;
+        result_y[i] = 0;
+        result_w[i] = 0;
+        result_h[i] = 0;
+      }
+      *result_size = 0;*/
+      *finished=counter;
+      return ;    // return to the CPU to get next line in gthe image
+    }
+  }
+
+  *result_size = 0;
+
+  float  scaleFactor = 1.2;
+  unsigned char IMG1_data[IMAGE_HEIGHT][IMAGE_WIDTH];
+
+  float factor;
+  int height,width;
+
+  MySize winSize0;
+  winSize0.width = 24;
+  winSize0.height= 24;
+
+  factor = 1.1;
+
+  // Loop for image pyramid formation
+
+  L1:
+  while ( IMAGE_WIDTH/factor > WINDOW_SIZE && IMAGE_HEIGHT/factor > WINDOW_SIZE )
+  {
+
+    /* size of the window scaled up */
+    MySize winSize = { myRound(winSize0.width*factor), myRound(winSize0.height*factor) };
+
+    /* size of the image scaled down */
+    MySize sz = { (IMAGE_WIDTH/factor), (IMAGE_HEIGHT/factor) };
+
+    height = sz.height;
+    width  = sz.width;
+
+    imageScaler     ( IMAGE_HEIGHT,
+		      	  	  IMAGE_WIDTH,
+                      Data,
+                      height,
+					  width,
+                      IMG1_data);
+
+
+    processImage       ( factor,
+                         height,
+                         width,
+                         result_x_Scale,
+                         result_y_Scale,
+                         result_w_Scale,
+                         result_h_Scale,
+                         result_size_Scale,
+                         IMG1_data,
+                         winSize
+                       );
+    factor *= scaleFactor;
+  }
+
+   for ( i = 0; i < RESULT_SIZE; i++){
+      result_x[i] = result_x_Scale[i];
+      result_y[i] = result_y_Scale[i];
+      result_w[i] = result_w_Scale[i];
+      result_h[i] = result_h_Scale[i];
+   }
+   *result_size = *result_size_Scale;
+   *finished=255;
+   counter=0;
+   return ;
+}
+
+void processImage
+
+( float factor,
+  int sum_row,
+  int sum_col,
+  int *AllCandidates_x,
+  int *AllCandidates_y,
+  int *AllCandidates_w,
+  int *AllCandidates_h,
+  int *AllCandidates_size,
+  unsigned char IMG1_data[IMAGE_HEIGHT][IMAGE_WIDTH],
+  MySize winSize
+)
+{
+
+  #pragma HLS inline off
+  MyPoint p;
+  int result[2];
+  int step;
+
+  int u,v;
+  int x,y,i,j,k;
+  int m,n;
+  //  *******************mohammadali *************************
+  int SUM1_data[WINDOW_SIZE][WINDOW_SIZE], SQSUM1_data[WINDOW_SIZE][WINDOW_SIZE];
+  int SUM2_data[WINDOW_SIZE][WINDOW_SIZE], SQSUM2_data[WINDOW_SIZE][WINDOW_SIZE];
+  unsigned char win_data_1[WINDOW_SIZE][WINDOW_SIZE];
+  unsigned char win_data_2[WINDOW_SIZE][WINDOW_SIZE];
+
+
+ //*******************mohammadali *************************
+
+
+  Pixely: for( y = 0; y < sum_row - WINDOW_SIZE + 1; y+=4 ){
+    Pixelx: for ( x = 0; x < sum_col - WINDOW_SIZE + 1; x+=8 ){
+
+
+    	//*******************mohammadali *************************
+    	copyY: for( n = 0; n < WINDOW_SIZE; n++ ){
+    	    copyX: for ( m = 0; m < WINDOW_SIZE ; m++ ){
+			#pragma HLS unroll
+    	    	win_data_1[n][m]=IMG1_data[y+n][x+m];
+    	    	win_data_2[n][m]=IMG1_data[y+n][x+m+4];
+    	    }
+    	    }
+    	{
+    	//*******************mohammadali *************************
+    	 p.x = x;
+		 p.y = y;
+
+		 //*******************mohammadali *************************
+      integralImages_1(win_data_1, SUM1_data, SQSUM1_data );
+      integralImages_2(win_data_2, SUM2_data, SQSUM2_data );
+
+	  result[0] = cascadeClassifier_1( SUM1_data,SQSUM1_data);
+	  result[1] = cascadeClassifier_2( SUM2_data,SQSUM2_data);
+    	}
+
+	res:for(i=0;i<2;i++)
+#pragma HLS pipeline
+		 if ( result[i] > 0 ) {
+		   MyRect r = {myRound((p.x+i*4)*factor), myRound(p.y*factor), winSize.width, winSize.height};
+		   AllCandidates_x[*AllCandidates_size]=r.x;
+		   AllCandidates_y[*AllCandidates_size]=r.y;
+		   AllCandidates_w[*AllCandidates_size]=r.width;
+		   AllCandidates_h[*AllCandidates_size]=r.height;
+		  *AllCandidates_size=*AllCandidates_size+1;
+		 }
+
+	}
+  }
+}
+
+int cascadeClassifier_1 (int II[WINDOW_SIZE][WINDOW_SIZE],int SII[WINDOW_SIZE][WINDOW_SIZE])
+
+{
+//#pragma HLS INLINE
+  int i, j, k;
+
+  int mean;
+  unsigned int stddev = 0;
+  int haar_counter = 0;
+  int w_index = 0;
+  int r_index = 0;
+  int stage_sum=0;
+
+  #include "haar_dataRcc_with_partitioning.h"
+
+  static ap_uint<25> coord[12];
+  #pragma HLS array_partition variable=coord complete dim=0
+
+
+   stddev =                    SII[0][0]
+                             -  SII[0][WINDOW_SIZE-1]
+                             -  SII[WINDOW_SIZE-1][0]
+                             +  SII[WINDOW_SIZE-1][WINDOW_SIZE-1];
+
+    mean =                      II[0][0]
+                             -  II[0][WINDOW_SIZE-1]
+                             -  II[WINDOW_SIZE-1][0]
+                             +  II[WINDOW_SIZE-1][WINDOW_SIZE-1];
+
+  stddev = (stddev*(WINDOW_SIZE-1)*(WINDOW_SIZE-1));
+  stddev =  stddev - mean*mean;
+
+  if( stddev > 0 )
+  {
+    stddev = int_sqrt(stddev);
+  }
+  else{
+    stddev = 1;
+  }
+
+  MyRect tr0,tr1,tr2;
+
+  int r_id;
+  int w_id;
+  int s;
+
+  Stages: for ( i = 0; i < 25; i++ ) {
+    Filters: for ( j = 0; j < stages_array[i] ; j++ ){
+
+      if ( j == 0 ) {
+        stage_sum = 0; s=0;
+      }
+
+      r_id = r_index;
+      w_id = w_index;
+
+      tr0.x =  rectangles_array0[haar_counter];
+      tr0.width = rectangles_array2[haar_counter];
+      tr0.y =  rectangles_array1[haar_counter];
+      tr0.height = rectangles_array3[haar_counter];
+
+      tr1.x = rectangles_array4[haar_counter];
+      tr1.width = rectangles_array6[haar_counter];
+      tr1.y = rectangles_array5[haar_counter];
+      tr1.height = rectangles_array7[haar_counter];
+
+      tr2.x =     rectangles_array8[haar_counter];
+      tr2.width = rectangles_array10[haar_counter];
+      tr2.y =     rectangles_array9[haar_counter];
+      tr2.height = rectangles_array11[haar_counter];
+
+      coord[0] = II[tr0.y][tr0.x];
+      coord[1] = II[tr0.y][tr0.x+tr0.width];
+      coord[2] = II[tr0.y+tr0.height][tr0.x];
+      coord[3] = II[tr0.y+tr0.height][tr0.x+tr0.width];
+
+      coord[4] = II[tr1.y][tr1.x];
+      coord[5] = II[tr1.y][tr1.x+tr1.width];
+      coord[6] = II[tr1.y+tr1.height][tr1.x];
+      coord[7] = II[tr1.y+tr1.height][tr1.x+tr1.width];
+
+      if (!(tr2.x ==0 && tr2.width==0 && tr2.y==0 && tr2.height==0 ) && tr2.width!=0 && tr2.height!=0)
+      {
+        coord[8] = II[tr2.y][tr2.x];
+        coord[9] = II[tr2.y][tr2.x+tr2.width];
+        coord[10] = II[tr2.y+tr2.height][tr2.x];
+        coord[11] = II[tr2.y+tr2.height][tr2.x+tr2.width];
+      }
+      else
+      {
+        coord[8] = 0;
+        coord[9] = 0;
+        coord[10] = 0;
+        coord[11] = 0;
+      }
+
+      s = weakClassifier      ( stddev,
+                                coord,
+                                haar_counter,
+                                w_id
+                              );
+
+      stage_sum = stage_sum + s;
+      haar_counter = haar_counter+1;
+      w_index = w_index+3;
+      r_index = r_index+12;
+    } /* end of j loop */
+
+    if( stage_sum < 0.4*stages_thresh_array[i] ){
+       return -i;
+    }
+  } /* end of i loop */
+
+ return 1;
+}
+int cascadeClassifier_2 (int II[WINDOW_SIZE][WINDOW_SIZE],int SII[WINDOW_SIZE][WINDOW_SIZE])
+
+{
+//#pragma HLS INLINE
+  int i, j, k;
+
+  int mean;
+  unsigned int stddev = 0;
+  int haar_counter = 0;
+  int w_index = 0;
+  int r_index = 0;
+  int stage_sum=0;
+
+  #include "haar_dataRcc_with_partitioning.h"
+
+  static ap_uint<25> coord[12];
+  #pragma HLS array_partition variable=coord complete dim=0
+
+
+  stddev =                    SII[0][0]
+                           -  SII[0][WINDOW_SIZE-1]
+                           -  SII[WINDOW_SIZE-1][0]
+                           +  SII[WINDOW_SIZE-1][WINDOW_SIZE-1];
+
+  mean =                      II[0][0]
+                           -  II[0][WINDOW_SIZE-1]
+                           -  II[WINDOW_SIZE-1][0]
+                           +  II[WINDOW_SIZE-1][WINDOW_SIZE-1];
+
+
+  stddev = (stddev*(WINDOW_SIZE-1)*(WINDOW_SIZE-1));
+  stddev =  stddev - mean*mean;
+
+
+  if( stddev > 0 )
+  {
+    stddev = int_sqrt(stddev);
+  }
+  else{
+    stddev = 1;
+  }
+
+  MyRect tr0,tr1,tr2;
+
+  int r_id;
+  int w_id;
+  int s;
+
+  Stages: for ( i = 0; i < 25; i++ ) {
+    Filters: for ( j = 0; j < stages_array[i] ; j++ ){
+
+      if ( j == 0 ) {
+        stage_sum = 0; s=0;
+      }
+
+      r_id = r_index;
+      w_id = w_index;
+
+      tr0.x =  rectangles_array0[haar_counter];
+      tr0.width = rectangles_array2[haar_counter];
+      tr0.y =  rectangles_array1[haar_counter];
+      tr0.height = rectangles_array3[haar_counter];
+
+      tr1.x = rectangles_array4[haar_counter];
+      tr1.width = rectangles_array6[haar_counter];
+      tr1.y = rectangles_array5[haar_counter];
+      tr1.height = rectangles_array7[haar_counter];
+
+      tr2.x =     rectangles_array8[haar_counter];
+      tr2.width = rectangles_array10[haar_counter];
+      tr2.y =     rectangles_array9[haar_counter];
+      tr2.height = rectangles_array11[haar_counter];
+
+      coord[0] = II[tr0.y][tr0.x];
+      coord[1] = II[tr0.y][tr0.x+tr0.width];
+      coord[2] = II[tr0.y+tr0.height][tr0.x];
+      coord[3] = II[tr0.y+tr0.height][tr0.x+tr0.width];
+
+      coord[4] = II[tr1.y][tr1.x];
+      coord[5] = II[tr1.y][tr1.x+tr1.width];
+      coord[6] = II[tr1.y+tr1.height][tr1.x];
+      coord[7] = II[tr1.y+tr1.height][tr1.x+tr1.width];
+
+      if (!(tr2.x ==0 && tr2.width==0 && tr2.y==0 && tr2.height==0 ) && tr2.width!=0 && tr2.height!=0)
+      {
+        coord[8] = II[tr2.y][tr2.x];
+        coord[9] = II[tr2.y][tr2.x+tr2.width];
+        coord[10] = II[tr2.y+tr2.height][tr2.x];
+        coord[11] = II[tr2.y+tr2.height][tr2.x+tr2.width];
+      }
+      else
+      {
+        coord[8] = 0;
+        coord[9] = 0;
+        coord[10] = 0;
+        coord[11] = 0;
+      }
+
+      s = weakClassifier      ( stddev,
+                                coord,
+                                haar_counter,
+                                w_id
+                              );
+
+      stage_sum = stage_sum + s;
+      haar_counter = haar_counter+1;
+      w_index = w_index+3;
+      r_index = r_index+12;
+    } /* end of j loop */
+
+    if( stage_sum < 0.4*stages_thresh_array[i] ){
+       return -i;
+    }
+  } /* end of i loop */
+
+ return 1;
+}
+
+int weakClassifier
+(
+  int stddev,
+  ap_uint<25> coord[12],
+  int haar_counter,
+  int w_id
+)
+{
+  #include "haar_dataEWC_with_partitioning.h"
+  #pragma HLS INLINE
+  int t = tree_thresh_array[haar_counter] * stddev;
+
+  int sum0 =0;
+  int sum1 =0;
+  int sum2 =0;
+  int final_sum =0;
+  int return_value;
+
+  sum0 = (coord[0] - coord[1] - coord[2] + coord[3]) * weights_array0[haar_counter];//[w_id] area of 1st filter block (rectangle) multiplied by its weigh
+  sum1 = (coord[4] - coord[5] - coord[6] + coord[7]) * weights_array1[haar_counter];//[w_id+1];
+  sum2 = (coord[8] - coord[9] - coord[10] + coord[11]) * weights_array2[haar_counter];//[w_id+2];
+  final_sum = sum0+sum1+sum2;
+
+  if(final_sum >= t)
+  {
+    return_value =  alpha2_array[haar_counter];
+  }
+  else
+  {
+    return_value =  alpha1_array[haar_counter];
+  }
+
+  return return_value ;
+
+}
+
+/***********************************************************
+ * This function downsample an image using nearest neighbor
+ * It is used to build the image pyramid
+ **********************************************************/
+void imageScaler
+(
+  int src_height,
+  int src_width,
+  unsigned char Data[IMAGE_HEIGHT][IMAGE_WIDTH],
+  int dest_height,
+  int dest_width,
+  unsigned char IMG1_data[IMAGE_HEIGHT][IMAGE_WIDTH]
+)
+{
+  int y;
+  int j;
+  int x;
+  int i;
+  unsigned char* t;
+  unsigned char* p;
+  int w1 = src_width;
+  int h1 = src_height;
+  int w2 = dest_width;
+  int h2 = dest_height;
+
+  int rat = 0;
+
+  int x_ratio = (int)((w1<<16)/w2) +1;
+  int y_ratio = (int)((h1<<16)/h2) +1;
+
+
+  nearestNeighborL1:
+  for ( i = 0 ; i < IMAGE_HEIGHT ; i++ )
+  {
+      nearestNeighborL1_1:
+      for (j=0;j < IMAGE_WIDTH ;j++)
+      {
+        #pragma HLS pipeline
+        if ( j < w2 && i < h2 )
+        {
+          IMG1_data[i][j] =  Data[(i*y_ratio)>>16][(j*x_ratio)>>16];
+        }
+      }
+  }
+}
+
+unsigned int int_sqrt
+(
+  unsigned int value
+)
+{
+  int i;
+  unsigned int a = 0, b = 0, c = 0;
+
+
+
+  for ( i = 0 ; i < (32 >> 1) ; i++ )
+  {
+    #pragma HLS unroll
+    c<<= 2;
+    #define UPPERBITS(value) (value>>30)
+    c += UPPERBITS(value);
+    #undef UPPERBITS
+    value <<= 2;
+    a <<= 1;
+    b = (a<<1) | 1;
+    if ( c >= b )
+    {
+      c -= b;
+      a++;
+    }
+  }
+  return a;
+}
+
+
+int max
+(
+  int a,
+   int b
+)
+{
+ if ( a > b )
+   return a;
+ else
+   return b;
+}
+
+int min
+(
+  int a,
+  int b
+)
+{
+  if ( a < b )
+    return a;
+  else
+    return b;
+}
+void integralImages_1( unsigned char Data[WINDOW_SIZE][WINDOW_SIZE], int Sum[WINDOW_SIZE][WINDOW_SIZE], int Sqsum[WINDOW_SIZE][WINDOW_SIZE])
+{
+#pragma HLS inline off
+  int x, y, s, sq, t, tq;
+  unsigned char it;
+
+ inty1: for( y = 0; y < WINDOW_SIZE; y++)
+    {
+      s = 0;
+      sq = 0;
+      /* loop over the number of columns */
+      for( x = 0; x < WINDOW_SIZE; x ++)
+	{
+#pragma HLS pipeline
+	  it = Data[y][x];
+	  /* sum of the current row (integer)*/
+	  s += it;
+	  sq += it*it;
+
+	  t = s;
+	  tq = sq;
+	  if (y != 0)
+	    {
+	      t += Sum[(y-1)][x];
+	      tq += Sqsum[(y-1)][x];
+	    }
+	  Sum[y][x]=t;
+	  Sqsum[y][x]=tq;
+	}
+    }
+}
+void integralImages_2(unsigned char Data[WINDOW_SIZE][WINDOW_SIZE], int Sum[WINDOW_SIZE][WINDOW_SIZE], int Sqsum[WINDOW_SIZE][WINDOW_SIZE])
+{
+#pragma HLS inline off
+  int x, y, s, sq, t, tq;
+  unsigned char it;
+
+  inty2: for( y = 0; y < WINDOW_SIZE; y++)
+    {
+      s = 0;
+      sq = 0;
+      /* loop over the number of columns */
+      for( x = 0; x < WINDOW_SIZE; x ++)
+	{
+#pragma HLS pipeline
+	  it = Data[y][x];
+	  /* sum of the current row (integer)*/
+	  s += it;
+	  sq += it*it;
+
+	  t = s;
+	  tq = sq;
+	  if (y != 0)
+	    {
+	      t += Sum[(y-1)][x];
+	      tq += Sqsum[(y-1)][x];
+	    }
+	  Sum[y][x]=t;
+	  Sqsum[y][x]=tq;
+	}
+    }
+}
+
+
