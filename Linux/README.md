@@ -15,7 +15,7 @@ Follow below steps to copy and run your linux distribution
 2.	run following commands to copy Linux kernel
 
 ```
-rm -rf /media/<your_user_name> /BOOT/*
+rm -rf /media/<your_user_name>/BOOT/*
 cp BOOT/*  /media/<your_user_name>/BOOT/
 ```
 
