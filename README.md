@@ -8,23 +8,23 @@
 All files for regenerating Linux and Hardware design is included here, for more information see README inside each folder.
 
 ## HLS
-Includes all source codes for Haar cascade Face detection IP with vivado HLS. 
+Includes all source codes for Haar cascade Face detection IP with vivado HLS. [more information](HLS/README.md)
 based on this project: https://github.com/cornell-zhang/facedetect-fpga.git
 #### N.B. Source codes from original project has been modified for addaptation to Zybo Z7-20.
 
 ## Linux
-Includes laset kernel and root files for a rapid usage of project.
+Includes laset kernel and root files for a rapid usage of project. [more information](Linux/README.md)
 
 ## programs
-Includes source code of all programs for Zybo smart camera including facial recognition exemple included in Linux.
+Includes source code of all programs for Zybo smart camera including facial recognition exemple included in Linux.[more information](programs/README.md)
 
 ## vivado
-Includes all the files and the script for regenerating vivado project.
+Includes all the files and the script for regenerating vivado project. [more information](vivado/README.md)
 #### notice mipi licence is requierd.
 
 ## Yocto 
-Includes all files for regenerating Linux for Yocto project.
+Includes all files for regenerating Linux for Yocto project.[more information](Yocto/README.md)
 
 ## Known Issues
 * if camera stream has been stoped, a reboot is needed.
-* sometimes due to bad initializations camera feed is not decoded currectly, a reboot is needed.
+* sometimes due to bad initializations camera feed is not decoded correctly, a reboot is needed.
