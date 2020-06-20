@@ -16,14 +16,14 @@ based on this project: https://github.com/cornell-zhang/facedetect-fpga.git
 Includes laset kernel and root files for a rapid usage of project. [more information](Linux/README.md)
 
 ## programs
-Includes source code of all programs for Zybo smart camera including facial recognition exemple included in Linux.[more information](programs/README.md)
+Includes source code of all programs for Zybo smart camera including facial recognition exemple included in Linux. [more information](programs/README.md)
 
 ## vivado
 Includes all the files and the script for regenerating vivado project. [more information](vivado/README.md)
 #### notice mipi licence is requierd.
 
 ## Yocto 
-Includes all files for regenerating Linux for Yocto project.[more information](Yocto/README.md)
+Includes all files for regenerating Linux for Yocto project. [more information](Yocto/README.md)
 
 ## Known Issues
 * if camera stream has been stoped, a reboot is needed.
