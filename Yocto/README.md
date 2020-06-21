@@ -41,7 +41,7 @@ cd meta-openembedded
 git checkout thud
 ```
 copy “meta-smartcam” folder to “yocto/layers”.
-in yocto root directory do followinf:
+in yocto root directory do following:
 
 ```
 source layers/poky/oe-init-build-env
