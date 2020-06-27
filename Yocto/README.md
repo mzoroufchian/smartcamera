@@ -77,7 +77,7 @@ accordingly (exemple HW_BD = "system" name of block design and FILESEXTRAPATH_pr
 Run following command to generate Linux (depending on machine it might take several hours) it must be run on project root 
 directory (yocto directory)
 ```
-source layers/poky/poky/oe-init-build-env
+source layers/poky/oe-init-build-env
 ```
 After this command terminal will automatically change directory to build
 ```
