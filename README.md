@@ -7,6 +7,8 @@
 
 All files for regenerating Linux and Hardware design is included here, for more information see README inside each folder.
 
+Link to project's introduction Video: https://youtu.be/JW_5zZQR6VQ
+
 ## HLS
 Includes all source codes for Haar cascade Face detection IP with vivado HLS. [more information](HLS/README.md)
 Based on this project: https://github.com/cornell-zhang/facedetect-fpga.git
